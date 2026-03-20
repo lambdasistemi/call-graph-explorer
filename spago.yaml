@@ -26,6 +26,7 @@ package:
     - web-file
     - foreign
     - dom-indexed
+    - halogen-subscriptions
   bundle:
     module: Main
     outfile: dist/index.js

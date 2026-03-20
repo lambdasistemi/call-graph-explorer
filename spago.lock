@@ -18,6 +18,7 @@
             "foreign",
             "foreign-object",
             "halogen",
+            "halogen-subscriptions",
             "integers",
             "maybe",
             "ordered-collections",
