@@ -25,6 +25,9 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
+import Web.HTML (window)
+import Web.HTML.Window (localStorage)
+import Web.Storage.Storage as WS
 
 import FFI.Cytoscape as Cy
 import GitHub as GH
@@ -271,6 +274,31 @@ subscribeTaps = do
       (NodeTapped nodeId)
   void $ H.subscribe emitter
 
+saveParam :: String -> String -> Effect Unit
+saveParam key value = do
+  w <- window
+  s <- localStorage w
+  WS.setItem ("cge-" <> key) value s
+
+loadParam :: String -> Effect (Maybe String)
+loadParam key = do
+  w <- window
+  s <- localStorage w
+  WS.getItem ("cge-" <> key) s
+
+-- | Restore form params from localStorage.
+restoreParams
+  :: Effect
+       { repo :: String
+       , ref :: String
+       , token :: String
+       }
+restoreParams = do
+  repo <- fromMaybe "" <$> loadParam "repo"
+  ref <- fromMaybe "main" <$> loadParam "ref"
+  token <- fromMaybe "" <$> loadParam "token"
+  pure { repo, ref, token }
+
 parseOwnerRepo
   :: String
   -> Maybe
@@ -290,8 +318,14 @@ handleAction
   => Action
   -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
-  Initialize ->
+  Initialize -> do
     liftEffect (Cy.initCytoscape "cy")
+    params <- liftEffect restoreParams
+    H.modify_ _
+      { repoInput = params.repo
+      , refInput = params.ref
+      , tokenInput = params.token
+      }
 
   SetRepo value ->
     H.modify_ _ { repoInput = value }
@@ -338,6 +372,11 @@ handleAction = case _ of
             liftEffect $ Cy.setElements
               (toElements graph)
             subscribeTaps
+            liftEffect do
+              saveParam "repo" state.repoInput
+              saveParam "ref" state.refInput
+              saveParam "token"
+                state.tokenInput
             H.modify_ _
               { fullGraph = graph
               , selectedNode = Nothing
