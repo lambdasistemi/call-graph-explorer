@@ -31,6 +31,7 @@ import Web.Storage.Storage as WS
 
 import FFI.Cytoscape as Cy
 import FFI.Highlight as HL
+import FFI.Resize as Resize
 import GitHub as GH
 import Graph.Build (buildGraph)
 import Graph.Cytoscape (toElements)
@@ -59,6 +60,9 @@ data Action
   | IncDepth
   | DecDepth
   | FitAll
+  | SelectFromHistory NodeId
+  | RemoveFromHistory NodeId
+  | ClearHistory
 
 type State =
   { repoInput :: String
@@ -71,6 +75,12 @@ type State =
   , selectedKind :: Maybe NodeKind
   , selectedModule :: Maybe ModuleName
   , sourceCode :: Maybe String
+  , history ::
+      Array
+        { nodeId :: NodeId
+        , label :: String
+        , kind :: NodeKind
+        }
   , focusDepth :: Int
   , focused :: Boolean
   , loading :: Boolean
@@ -94,6 +104,7 @@ initialState _ =
   , selectedKind: Nothing
   , selectedModule: Nothing
   , sourceCode: Nothing
+  , history: []
   , focusDepth: 1
   , focused: false
   , loading: false
@@ -210,9 +221,79 @@ render state =
               else HH.text ""
             ]
         , HH.div
+            [ HP.id "resize-handle" ]
+            []
+        , HH.div
             [ HP.id "sidebar" ]
-            [ renderSidebar state ]
+            [ renderHistory state
+            , renderSidebar state
+            ]
         ]
+    ]
+
+renderHistory
+  :: forall m
+   . State
+  -> H.ComponentHTML Action () m
+renderHistory state =
+  if Array.null state.history then
+    HH.text ""
+  else
+    HH.div
+      [ HP.id "history" ]
+      [ HH.div
+          [ HP.id "history-header" ]
+          [ HH.span_
+              [ HH.text "Selection history"
+              ]
+          , HH.button
+              [ HE.onClick \_ ->
+                  ClearHistory
+              ]
+              [ HH.text "Clear" ]
+          ]
+      , HH.div
+          [ HP.id "history-list" ]
+          ( map renderHistoryItem
+              state.history
+          )
+      ]
+
+renderHistoryItem
+  :: forall m
+   . { nodeId :: NodeId
+     , label :: String
+     , kind :: NodeKind
+     }
+  -> H.ComponentHTML Action () m
+renderHistoryItem item =
+  HH.div
+    [ HP.class_
+        (HH.ClassName "history-item")
+    ]
+    [ HH.span
+        [ HP.class_
+            ( HH.ClassName
+                ( "kind-dot kind-"
+                    <> show item.kind
+                )
+            )
+        ]
+        []
+    , HH.span
+        [ HP.class_
+            (HH.ClassName "history-label")
+        , HE.onClick \_ ->
+            SelectFromHistory item.nodeId
+        ]
+        [ HH.text item.label ]
+    , HH.button
+        [ HP.class_
+            (HH.ClassName "history-remove")
+        , HE.onClick \_ ->
+            RemoveFromHistory item.nodeId
+        ]
+        [ HH.text "x" ]
     ]
 
 renderSidebar
@@ -326,6 +407,7 @@ handleAction
 handleAction = case _ of
   Initialize -> do
     liftEffect (Cy.initCytoscape "cy")
+    liftEffect Resize.initResize
     params <- liftEffect restoreParams
     H.modify_ _
       { repoInput = params.repo
@@ -403,12 +485,23 @@ handleAction = case _ of
       mod_ = map _.module_ node
       nodeLine = node >>= _.line
     liftEffect $ Cy.markRoot nodeId
+    let
+      newHistory = case node of
+        Just n ->
+          addToHistory
+            { nodeId
+            , label: n.label
+            , kind: n.kind
+            }
+            state.history
+        Nothing -> state.history
     H.modify_ _
       { selectedNode = Just nodeId
       , selectedLabel = map _.label node
       , selectedKind = map _.kind node
       , selectedModule = mod_
       , sourceCode = Nothing
+      , history = newHistory
       }
     case mod_ of
       Just path | path /= "" -> do
@@ -470,6 +563,43 @@ handleAction = case _ of
       handleAction Focus
 
   FitAll -> liftEffect Cy.fitAll
+
+  SelectFromHistory nodeId ->
+    handleAction (NodeTapped nodeId)
+
+  RemoveFromHistory nodeId ->
+    H.modify_ \s -> s
+      { history = Array.filter
+          (\i -> i.nodeId /= nodeId)
+          s.history
+      }
+
+  ClearHistory ->
+    H.modify_ _ { history = [] }
+
+-- | Add a node to history, avoiding duplicates.
+-- | Most recent at the top.
+addToHistory
+  :: { nodeId :: NodeId
+     , label :: String
+     , kind :: NodeKind
+     }
+  -> Array
+       { nodeId :: NodeId
+       , label :: String
+       , kind :: NodeKind
+       }
+  -> Array
+       { nodeId :: NodeId
+       , label :: String
+       , kind :: NodeKind
+       }
+addToHistory item history =
+  Array.cons item
+    ( Array.filter
+        (\i -> i.nodeId /= item.nodeId)
+        history
+    )
 
 -- | Extract a code snippet around the given line.
 -- | Shows 3 lines before and continues until the
