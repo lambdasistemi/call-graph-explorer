@@ -39,7 +39,11 @@
               pkgs.esbuild
               pkgs.nodejs_20
               pkgs.just
+              pkgs.playwright-test
+              pkgs.python3
             ];
+            PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
           };
         }
       );

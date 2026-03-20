@@ -20,3 +20,17 @@ jobs:
           name: paolino
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - run: nix develop --quiet -c just ci
+
+  test:
+    runs-on: nixos
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/cachix-action@v15
+        with:
+          name: paolino
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Run Playwright tests
+        run: nix develop --quiet -c just test
+        env:
+          GH_TOKEN: ${{ github.token }}

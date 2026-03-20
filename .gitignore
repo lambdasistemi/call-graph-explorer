@@ -3,5 +3,6 @@ output/
 dist/index.js
 node_modules/
 flake.lock
+test-results/
 .llm/
 WIP.md
