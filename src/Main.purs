@@ -232,8 +232,11 @@ render state =
             []
         , HH.div
             [ HP.id "sidebar" ]
-            [ renderHistory state
-            , renderSidebar state
+            [ renderSidebar state
+            , HH.div
+                [ HP.id "vert-resize-handle" ]
+                []
+            , renderHistory state
             ]
         ]
     ]
@@ -480,6 +483,32 @@ decodeRepos json =
     lmap show
       (decodeJson j :: Either _ (Array RepoEntry))
 
+type HistoryEntry =
+  { nodeId :: NodeId
+  , label :: String
+  , kind :: NodeKind
+  }
+
+saveHistory :: Array HistoryEntry -> Effect Unit
+saveHistory h =
+  saveParam "history" (stringify (encodeJson h))
+
+restoreHistory :: Effect (Array HistoryEntry)
+restoreHistory = do
+  raw <- loadParam "history"
+  pure $ case raw of
+    Nothing -> []
+    Just json ->
+      case
+        jsonParser json >>= \j ->
+          lmap show
+            ( decodeJson j
+                :: Either _ (Array HistoryEntry)
+            )
+        of
+        Right h -> h
+        Left _ -> []
+
 parseOwnerRepo
   :: String
   -> Maybe
@@ -503,7 +532,11 @@ handleAction = case _ of
     liftEffect (Cy.initCytoscape "cy")
     liftEffect Resize.initResize
     repos <- liftEffect restoreRepos
-    H.modify_ _ { repos = repos }
+    hist <- liftEffect restoreHistory
+    H.modify_ _
+      { repos = repos
+      , history = hist
+      }
 
   SetRepo value ->
     H.modify_ _ { repoInput = value }
@@ -632,6 +665,7 @@ handleAction = case _ of
       , sourceCode = Nothing
       , history = newHistory
       }
+    liftEffect (saveHistory newHistory)
     case mod_ of
       Just path | path /= "" -> do
         cfg <- H.gets _.config
@@ -696,15 +730,18 @@ handleAction = case _ of
   SelectFromHistory nodeId ->
     handleAction (NodeTapped nodeId)
 
-  RemoveFromHistory nodeId ->
-    H.modify_ \s -> s
-      { history = Array.filter
-          (\i -> i.nodeId /= nodeId)
-          s.history
-      }
+  RemoveFromHistory nodeId -> do
+    state <- H.get
+    let
+      newHist = Array.filter
+        (\i -> i.nodeId /= nodeId)
+        state.history
+    H.modify_ _ { history = newHist }
+    liftEffect (saveHistory newHist)
 
-  ClearHistory ->
+  ClearHistory -> do
     H.modify_ _ { history = [] }
+    liftEffect (saveHistory [])
 
 -- | Add a node to history, avoiding duplicates.
 -- | Most recent at the top.

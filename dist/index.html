@@ -234,10 +234,20 @@
       background: #4a90d9;
     }
     #history {
-      border-bottom: 1px solid #333;
+      border-top: 1px solid #333;
       flex-shrink: 0;
-      max-height: 200px;
+      height: 160px;
       overflow-y: auto;
+    }
+    #vert-resize-handle {
+      height: 5px;
+      background: #333;
+      cursor: row-resize;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    #vert-resize-handle:hover {
+      background: #4a90d9;
     }
     #history-header {
       display: flex;
