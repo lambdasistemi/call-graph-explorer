@@ -720,34 +720,152 @@ addToHistory item history =
         history
     )
 
--- | Extract a code snippet around the given line.
--- | Shows 3 lines before and continues until the
--- | next top-level definition (line starting at
--- | column 0 with a non-space character) or 30
--- | lines, whichever comes first.
+-- | Extract a complete top-level definition from
+-- | source code at the given line. Scans backwards
+-- | to find the Haddock comment and type signature,
+-- | forwards to find the end of the definition body.
+-- | Returns a valid Haskell block suitable for
+-- | syntax highlighting.
 extractSnippet :: Maybe Int -> String -> String
 extractSnippet Nothing src = src
 extractSnippet (Just targetLine) src =
   let
     allLines = String.split (Pattern "\n") src
-    -- 0-indexed start, show 5 lines before
-    start = max 0 (targetLine - 6)
-    afterTarget = Array.drop targetLine allLines
-    -- Find end: next top-level def or 50 lines
-    bodyLen = fromMaybe 50
-      ( Array.findIndex isTopLevel
-          (Array.drop 1 afterTarget)
-          <#> (_ + 1)
-      )
-    end = min (Array.length allLines)
-      (targetLine + bodyLen)
+    -- target is 1-indexed, array is 0-indexed
+    idx = targetLine - 1
+    -- Scan backwards from target to find the start
+    -- of the definition block: Haddock, signature,
+    -- or the target line itself.
+    start = findDefStart idx allLines
+    -- Scan forwards from target to find the end:
+    -- next top-level definition or EOF.
+    end = findDefEnd (idx + 1) allLines
     snippet = Array.slice start end allLines
   in
     String.joinWith "\n" snippet
 
--- | A line is a top-level definition if it starts
--- | with a non-space, non-empty character and is
--- | not a comment or pragma.
+-- | Scan backwards from a line index to find the
+-- | start of a definition block. Includes Haddock
+-- | comments (-- |, -- ^, {- | ... -}) and the
+-- | type signature.
+findDefStart :: Int -> Array String -> Int
+findDefStart idx allLines = go idx
+  where
+  go i
+    | i <= 0 = 0
+    | otherwise =
+        let
+          prev = fromMaybe ""
+            (Array.index allLines (i - 1))
+          trimPrev = String.trim prev
+        in
+          -- If we hit -}, scan back to {-
+          if String.contains (Pattern "-}") trimPrev
+            then goBlock (i - 1)
+          else if isDefPart prev then
+            go (i - 1)
+          else i
+
+  -- Inside a block comment, scan back to {-
+  goBlock i
+    | i <= 0 = 0
+    | otherwise =
+        let
+          line = fromMaybe ""
+            (Array.index allLines (i - 1))
+          trimLine = String.trim line
+        in
+          if String.contains
+            (Pattern "{-")
+            trimLine then
+            go (i - 1)
+          else
+            goBlock (i - 1)
+
+-- | Check if a line is part of the current
+-- | definition block (scanning backwards).
+-- | Includes: Haddock, signatures, continuations,
+-- | blank lines, and function name lines
+-- | (non-indented without = or keywords).
+isDefPart :: String -> Boolean
+isDefPart line =
+  isHaddock line
+    || isContinuation line
+    || isSignature line
+    || isFunctionName line
+
+-- | A standalone function name line: starts at
+-- | column 0, no =, no keywords.
+isFunctionName :: String -> Boolean
+isFunctionName line =
+  isNonIndented line
+    && not (String.contains (Pattern "=") line)
+    && not (String.contains (Pattern "data ") line)
+    && not
+      ( String.contains (Pattern "type ") line
+      )
+    && not
+      ( String.contains (Pattern "class ") line
+      )
+    && not
+      ( String.contains
+          (Pattern "instance ")
+          line
+      )
+    && not
+      ( String.contains (Pattern "import ") line
+      )
+    && not
+      ( String.contains (Pattern "module ") line
+      )
+    && not (isBlank line)
+
+-- | Scan forwards from a line index to find the
+-- | end of a definition body. Stops at the next
+-- | top-level definition (non-indented, non-blank
+-- | line that isn't a comment).
+findDefEnd :: Int -> Array String -> Int
+findDefEnd startIdx allLines = go startIdx
+  where
+  total = Array.length allLines
+  go i
+    | i >= total = total
+    | otherwise =
+        let
+          line = fromMaybe ""
+            (Array.index allLines i)
+        in
+          if isTopLevel line then i
+          else go (i + 1)
+
+-- | A Haddock comment line.
+isHaddock :: String -> Boolean
+isHaddock line =
+  let
+    t = String.trim line
+  in
+    String.take 4 t == "-- |"
+      || String.take 4 t == "-- ^"
+      || String.take 4 t == "-- *"
+      || String.take 5 t == "{- |"
+
+-- | A type signature line (contains ::).
+isSignature :: String -> Boolean
+isSignature line =
+  String.contains (Pattern "::") line
+    && isNonIndented line
+
+-- | A continuation line (indented: starts with
+-- | space, =>, ->, or comma).
+isContinuation :: String -> Boolean
+isContinuation line =
+  case SCU.charAt 0 line of
+    Nothing -> false
+    Just c -> c == ' ' || c == '\t'
+
+-- | A non-indented, non-blank, non-comment line
+-- | that signals the start of a new top-level
+-- | definition.
 isTopLevel :: String -> Boolean
 isTopLevel line =
   case SCU.charAt 0 line of
@@ -755,9 +873,20 @@ isTopLevel line =
     Just c ->
       c /= ' '
         && c /= '\t'
-        && c /= '-'
-        && c /= '{'
         && c /= '\n'
+        && not (isHaddock line)
+        && not (isBlank line)
+
+-- | Check if a line is blank.
+isBlank :: String -> Boolean
+isBlank line = String.trim line == ""
+
+-- | Check if a line starts at column 0.
+isNonIndented :: String -> Boolean
+isNonIndented line =
+  case SCU.charAt 0 line of
+    Just c -> c /= ' ' && c /= '\t'
+    Nothing -> false
 
 main :: Effect Unit
 main =
