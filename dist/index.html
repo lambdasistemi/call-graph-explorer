@@ -6,35 +6,48 @@
   <title>Call Graph Explorer</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      height: 100%;
-    }
+    html, body { height: 100%; overflow: hidden; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #1a1a2e;
       color: #e0e0e0;
     }
-    #app, body > div {
+    body > div {
       display: flex;
       flex-direction: column;
       height: 100%;
     }
     #toolbar {
       display: flex;
+      align-items: center;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 6px 12px;
       background: #16213e;
       border-bottom: 1px solid #333;
       flex-shrink: 0;
     }
-    #toolbar button {
-      padding: 6px 14px;
+    #toolbar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
       border: 1px solid #444;
       border-radius: 4px;
       background: #252542;
       color: #e0e0e0;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
+    }
+    #toolbar label:hover { background: #333; }
+    #toolbar label input[type="file"] { display: none; }
+    #toolbar button {
+      padding: 4px 10px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #252542;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 12px;
     }
     #toolbar button:hover {
       background: #333;
@@ -43,15 +56,26 @@
     #main {
       display: flex;
       flex: 1;
-      overflow: hidden;
+      min-height: 0;
     }
     #cy {
       flex: 1;
+      min-width: 0;
       background: #0f1525;
+      position: relative;
+    }
+    #cy #placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #555;
+      font-size: 14px;
+      text-align: center;
     }
     #sidebar {
-      width: 280px;
-      padding: 16px;
+      width: 240px;
+      padding: 12px;
       background: #16213e;
       border-left: 1px solid #333;
       overflow-y: auto;
@@ -59,13 +83,14 @@
     }
     #sidebar h3 {
       color: #4a90d9;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+      font-size: 14px;
       word-break: break-all;
     }
     #sidebar p {
-      color: #9e9e9e;
-      font-size: 13px;
-      line-height: 1.6;
+      color: #777;
+      font-size: 12px;
+      line-height: 1.5;
     }
     .kind-badge {
       display: inline-block;
@@ -73,31 +98,22 @@
       border-radius: 3px;
       font-size: 11px;
       font-weight: bold;
-      margin-bottom: 8px;
+      color: #fff;
     }
     .kind-module { background: #2c3e50; }
     .kind-type { background: #8e44ad; }
     .kind-function { background: #27ae60; }
     .kind-constructor { background: #e67e22; }
+    .kind-field { background: #3498db; }
   </style>
 </head>
 <body>
-  <div id="toolbar"></div>
-  <div id="main">
-    <div id="cy"></div>
-    <div id="sidebar">
-      <p>Loading graph...</p>
-    </div>
-  </div>
-
   <script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
   <script src="https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js"></script>
   <script src="https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
   <script>
     if (typeof cytoscapeElk !== 'undefined') {
       cytoscape.use(cytoscapeElk);
-    } else {
-      console.error("cytoscape-elk not loaded");
     }
   </script>
   <script src="index.js"></script>
