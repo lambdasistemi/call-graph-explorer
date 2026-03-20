@@ -19,7 +19,9 @@ import Data.Bifunctor (lmap)
 import Data.Argonaut.Encode.Class (encodeJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Either (Either(..))
+import Data.Traversable (traverse)
 import Effect (Effect)
+import Effect.Aff (Aff)
 import Effect.Aff.Class
   ( class MonadAff
   , liftAff
@@ -36,6 +38,7 @@ import Web.HTML (window)
 import Web.HTML.Window (localStorage)
 import Web.Storage.Storage as WS
 
+import FFI.Crypto as Crypto
 import FFI.Cytoscape as Cy
 import FFI.Highlight as HL
 import FFI.Resize as Resize
@@ -459,21 +462,39 @@ loadParam key = do
   s <- localStorage w
   WS.getItem ("cge-" <> key) s
 
--- | Save repo list as JSON to localStorage.
-saveRepos :: Array RepoEntry -> Effect Unit
-saveRepos repos =
-  saveParam "repos" (stringify (encodeJson repos))
+-- | Save repo list with encrypted tokens.
+saveRepos :: Array RepoEntry -> Aff Unit
+saveRepos repos = do
+  encrypted <- traverse encryptRepo repos
+  liftEffect $ saveParam "repos"
+    (stringify (encodeJson encrypted))
 
--- | Restore repo list from localStorage.
-restoreRepos :: Effect (Array RepoEntry)
+-- | Encrypt the token in a repo entry.
+encryptRepo :: RepoEntry -> Aff RepoEntry
+encryptRepo r
+  | r.token == "" = pure r
+  | otherwise = do
+      enc <- Crypto.encrypt r.token
+      pure r { token = enc }
+
+-- | Restore repo list, decrypting tokens.
+restoreRepos :: Aff (Array RepoEntry)
 restoreRepos = do
-  raw <- loadParam "repos"
-  pure $ case raw of
-    Nothing -> []
+  raw <- liftEffect (loadParam "repos")
+  case raw of
+    Nothing -> pure []
     Just json ->
       case decodeRepos json of
-        Right repos -> repos
-        Left _ -> []
+        Right repos -> traverse decryptRepo repos
+        Left _ -> pure []
+
+-- | Decrypt the token in a repo entry.
+decryptRepo :: RepoEntry -> Aff RepoEntry
+decryptRepo r
+  | r.token == "" = pure r
+  | otherwise = do
+      dec <- Crypto.decrypt r.token
+      pure r { token = dec }
 
 decodeRepos
   :: String
@@ -531,7 +552,7 @@ handleAction = case _ of
   Initialize -> do
     liftEffect (Cy.initCytoscape "cy")
     liftEffect Resize.initResize
-    repos <- liftEffect restoreRepos
+    repos <- liftAff restoreRepos
     hist <- liftEffect restoreHistory
     H.modify_ _
       { repos = repos
@@ -578,7 +599,7 @@ handleAction = case _ of
           , refInput = "main"
           , error = Nothing
           }
-        liftEffect (saveRepos newRepos)
+        liftAff (saveRepos newRepos)
         handleAction (LoadRepo entry)
 
   LoadRepo entry -> do
@@ -637,7 +658,7 @@ handleAction = case _ of
         )
         state.repos
     H.modify_ _ { repos = newRepos }
-    liftEffect (saveRepos newRepos)
+    liftAff (saveRepos newRepos)
 
   NodeTapped nodeId -> do
     state <- H.get
