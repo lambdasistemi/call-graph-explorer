@@ -1,3 +1,4 @@
+// exposed on window for debugging
 var _cy = null;
 
 export const initCytoscape = (containerId) => (elements) => () => {
@@ -19,15 +20,15 @@ export const initCytoscape = (containerId) => (elements) => () => {
           label: "data(label)",
           "text-valign": "center",
           "text-halign": "center",
-          "font-size": "8px",
+          "font-size": "12px",
           "font-family": "monospace",
           "background-color": "#4a90d9",
           color: "#fff",
           "text-outline-color": "#4a90d9",
-          "text-outline-width": 1,
+          "text-outline-width": 1.5,
           width: "label",
           height: "label",
-          padding: "3px",
+          padding: "6px",
           shape: "round-rectangle",
         },
       },
@@ -41,11 +42,11 @@ export const initCytoscape = (containerId) => (elements) => () => {
           "border-opacity": 0.6,
           "text-valign": "top",
           "text-halign": "center",
-          "font-size": "11px",
+          "font-size": "16px",
           "font-weight": "bold",
           color: "#4a90d9",
           "text-outline-width": 0,
-          padding: "15px",
+          padding: "20px",
           shape: "round-rectangle",
         },
       },
@@ -54,10 +55,10 @@ export const initCytoscape = (containerId) => (elements) => () => {
         style: {
           "background-color": "#8e44ad",
           "text-outline-color": "#8e44ad",
-          "font-size": "9px",
+          "font-size": "13px",
           "font-weight": "bold",
           shape: "diamond",
-          padding: "5px",
+          padding: "8px",
         },
       },
       {
@@ -74,7 +75,7 @@ export const initCytoscape = (containerId) => (elements) => () => {
           "background-color": "#e67e22",
           "text-outline-color": "#e67e22",
           shape: "rectangle",
-          "font-size": "7px",
+          "font-size": "10px",
         },
       },
       {
@@ -83,7 +84,7 @@ export const initCytoscape = (containerId) => (elements) => () => {
           "background-color": "#3498db",
           "text-outline-color": "#3498db",
           shape: "round-rectangle",
-          "font-size": "7px",
+          "font-size": "10px",
         },
       },
       {
@@ -146,8 +147,8 @@ export const initCytoscape = (containerId) => (elements) => () => {
       elk: {
         algorithm: "layered",
         "elk.direction": "DOWN",
-        "elk.layered.spacing.nodeNodeBetweenLayers": "40",
-        "elk.spacing.nodeNode": "15",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "60",
+        "elk.spacing.nodeNode": "25",
         "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       },
       fit: true,
