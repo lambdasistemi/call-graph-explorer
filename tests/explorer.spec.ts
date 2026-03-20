@@ -134,10 +134,10 @@ test.describe("Graph loading", () => {
     await expect(
       page.locator(".module-path")
     ).toContainText("tutorial/Composed.hs");
-    // Source code
+    // Source code snippet around the definition
     await expect(
       page.locator("#source-code")
-    ).toContainText("module Composed");
+    ).toContainText("composedFollowing");
   });
 
   test("Focus shows neighborhood subgraph", async ({

@@ -5,12 +5,17 @@
       url = "github:thomashoneyman/purescript-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    dev-assets-playwright = {
+      url = "github:paolino/dev-assets?dir=playwright&ref=feat/playwright";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       nixpkgs,
       purescript-overlay,
+      dev-assets-playwright,
       ...
     }:
     let
@@ -31,6 +36,9 @@
         in
         {
           default = pkgs.mkShell {
+            inputsFrom = [
+              dev-assets-playwright.devShells.${system}.default
+            ];
             buildInputs = [
               pkgs.purs
               pkgs.spago-unstable
@@ -39,11 +47,7 @@
               pkgs.esbuild
               pkgs.nodejs_20
               pkgs.just
-              pkgs.playwright-test
-              pkgs.python3
             ];
-            PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
-            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
           };
         }
       );
