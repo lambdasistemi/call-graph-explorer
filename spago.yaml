@@ -27,6 +27,7 @@ package:
     - foreign
     - dom-indexed
     - halogen-subscriptions
+    - fetch
   bundle:
     module: Main
     outfile: dist/index.js
