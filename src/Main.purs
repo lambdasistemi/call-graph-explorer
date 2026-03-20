@@ -30,6 +30,7 @@ import Web.HTML.Window (localStorage)
 import Web.Storage.Storage as WS
 
 import FFI.Cytoscape as Cy
+import FFI.Highlight as HL
 import GitHub as GH
 import Graph.Build (buildGraph)
 import Graph.Cytoscape (toElements)
@@ -257,7 +258,12 @@ renderSidebar state =
             Just src ->
               HH.pre
                 [ HP.id "source-code" ]
-                [ HH.code_
+                [ HH.code
+                    [ HP.class_
+                        ( HH.ClassName
+                            "language-haskell"
+                        )
+                    ]
                     [ HH.text src ]
                 ]
         ]
@@ -410,7 +416,7 @@ handleAction = case _ of
         result <- liftAff
           (GH.fetchFile cfg path)
         case result of
-          Right src ->
+          Right src -> do
             H.modify_ _
               { sourceCode = Just
                   ( extractSnippet
@@ -418,6 +424,7 @@ handleAction = case _ of
                       src
                   )
               }
+            liftEffect HL.highlightCode
           Left _ -> pure unit
       _ -> pure unit
 
@@ -474,11 +481,11 @@ extractSnippet Nothing src = src
 extractSnippet (Just targetLine) src =
   let
     allLines = String.split (Pattern "\n") src
-    -- 0-indexed start, show 3 lines before
-    start = max 0 (targetLine - 4)
+    -- 0-indexed start, show 5 lines before
+    start = max 0 (targetLine - 6)
     afterTarget = Array.drop targetLine allLines
-    -- Find end: next top-level def or 30 lines
-    bodyLen = fromMaybe 30
+    -- Find end: next top-level def or 50 lines
+    bodyLen = fromMaybe 50
       ( Array.findIndex isTopLevel
           (Array.drop 1 afterTarget)
           <#> (_ + 1)
@@ -486,28 +493,8 @@ extractSnippet (Just targetLine) src =
     end = min (Array.length allLines)
       (targetLine + bodyLen)
     snippet = Array.slice start end allLines
-    -- Add line numbers
-    numbered = Array.mapWithIndex
-      ( \i line ->
-          let
-            num = show (start + i + 1)
-            pad =
-              String.joinWith ""
-                ( Array.replicate
-                    (4 - String.length num)
-                    " "
-                )
-            marker =
-              if start + i + 1 == targetLine
-                then ">"
-                else " "
-          in
-            pad <> num <> marker <> " "
-              <> line
-      )
-      snippet
   in
-    String.joinWith "\n" numbered
+    String.joinWith "\n" snippet
 
 -- | A line is a top-level definition if it starts
 -- | with a non-space, non-empty character and is
