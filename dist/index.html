@@ -27,6 +27,14 @@
       flex-shrink: 0;
       flex-wrap: wrap;
     }
+    #repo-link {
+      color: #4a90d9;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    #repo-link:hover { text-decoration: underline; }
     #toolbar input {
       padding: 4px 8px;
       border: 1px solid #444;
@@ -215,14 +223,14 @@
       color: #888;
       margin: 4px 0;
     }
-    #resize-handle {
+    #resize-handle, #left-resize-handle {
       width: 5px;
       background: #333;
       cursor: col-resize;
       flex-shrink: 0;
       transition: background 0.15s;
     }
-    #resize-handle:hover {
+    #resize-handle:hover, #left-resize-handle:hover {
       background: #4a90d9;
     }
     #history {

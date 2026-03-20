@@ -156,7 +156,14 @@ render state =
   HH.div_
     [ HH.div
         [ HP.id "toolbar" ]
-        [ case state.selectedNode of
+        [ HH.a
+            [ HP.href
+                "https://github.com/lambdasistemi/call-graph-explorer"
+            , HP.target "_blank"
+            , HP.id "repo-link"
+            ]
+            [ HH.text "Call Graph Explorer" ]
+        , case state.selectedNode of
             Nothing -> HH.text ""
             Just _ ->
               if state.focused then
@@ -204,6 +211,9 @@ render state =
             [ renderRepoForm state
             , renderRepoList state
             ]
+        , HH.div
+            [ HP.id "left-resize-handle" ]
+            []
         , HH.div [ HP.id "cy" ]
             [ if
                 Map.isEmpty
