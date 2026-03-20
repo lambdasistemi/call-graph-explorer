@@ -1,6 +1,8 @@
 // Parse calligraphy DOT output into Cytoscape.js
-// elements — flat nodes (no compound parents), colored
-// by kind.
+// elements with module-level grouping only.
+//
+// Hierarchy: module (compound) > flat nodes
+// No nesting below module level.
 //
 // Calligraphy shapes:
 //   octagon  -> type (data/newtype/class)
@@ -12,7 +14,7 @@ export const parseDot = (dotString) => () => {
   var nodes = [];
   var edges = [];
   var currentModule = null;
-  var nodeModules = {};
+  var modules = {};
 
   var lines = dotString.split("\n");
 
@@ -22,7 +24,17 @@ export const parseDot = (dotString) => () => {
     // Module label
     var labelMatch = line.match(/^label="([^"]+)"/);
     if (labelMatch) {
-      currentModule = labelMatch[1];
+      var modName = labelMatch[1];
+      if (!modules[modName]) {
+        var modId = "mod_" + modName.replace(/\./g, "_");
+        modules[modName] = modId;
+        nodes.push({
+          group: "nodes",
+          data: { id: modId, label: modName },
+          classes: "module",
+        });
+      }
+      currentModule = modName;
       continue;
     }
 
@@ -48,21 +60,21 @@ export const parseDot = (dotString) => () => {
         kind = "function";
       }
 
-      var displayLabel = currentModule
-        ? currentModule + "." + nodeLabel
-        : nodeLabel;
+      var nodeData = {
+        id: nodeId,
+        label: nodeLabel,
+        kind: kind,
+        module: currentModule || "",
+      };
 
-      nodeModules[nodeId] = currentModule;
+      // Parent = module compound node
+      if (currentModule && modules[currentModule]) {
+        nodeData.parent = modules[currentModule];
+      }
 
       nodes.push({
         group: "nodes",
-        data: {
-          id: nodeId,
-          label: nodeLabel,
-          fullLabel: displayLabel,
-          kind: kind,
-          module: currentModule || "",
-        },
+        data: nodeData,
         classes: kind,
       });
       continue;
@@ -83,7 +95,6 @@ export const parseDot = (dotString) => () => {
       var isBack = line.indexOf("dir=back") !== -1;
 
       // dashed+arrowhead=none = parent-child tree
-      // (skip — we're flat)
       if (isDashed) continue;
 
       var source = isBack ? tgtId : srcId;
