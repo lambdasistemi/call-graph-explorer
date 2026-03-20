@@ -138,19 +138,32 @@ export const initCytoscape = (containerId) => (elements) => () => {
     maxZoom: 5,
   });
 
-  _cy.layout({
-    name: "elk",
-    elk: {
-      algorithm: "layered",
-      "elk.direction": "DOWN",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "40",
-      "elk.spacing.nodeNode": "15",
-      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-      "elk.layered.compaction.postCompaction.strategy": "EDGE_LENGTH",
-    },
-    fit: true,
-    padding: 30,
-  }).run();
+  // Try ELK (async), fall back to cose if unavailable
+  var layoutName = _cy.layoutUtilities ? "elk" : "elk";
+  try {
+    _cy.layout({
+      name: "elk",
+      elk: {
+        algorithm: "layered",
+        "elk.direction": "DOWN",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "40",
+        "elk.spacing.nodeNode": "15",
+        "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+      },
+      fit: true,
+      padding: 30,
+    }).run();
+  } catch (e) {
+    console.warn("ELK layout failed, using cose:", e);
+    _cy.layout({
+      name: "cose",
+      nodeRepulsion: 8000,
+      idealEdgeLength: 80,
+      fit: true,
+      padding: 30,
+      animate: false,
+    }).run();
+  }
 };
 
 export const onNodeTap = (callback) => () => {
