@@ -140,23 +140,23 @@
     #source-code {
       flex: 1;
       margin: 0;
-      padding: 10px 12px;
-      background: #0f1525;
+      padding: 0;
       border-top: 1px solid #333;
-      font-family: monospace;
-      font-size: 12px;
-      line-height: 1.5;
-      color: #c8d6e5;
       overflow: auto;
       tab-size: 4;
-      white-space: pre;
     }
     #source-code code {
       display: block;
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 10px 12px !important;
     }
   </style>
 </head>
 <body>
+  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css">
+  <script src="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+  <script src="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/languages/haskell.min.js"></script>
   <script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
   <script src="https://unpkg.com/elkjs@0.9.3/lib/elk.bundled.js"></script>
   <script src="https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
