@@ -11,6 +11,13 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (Pattern(..), split)
 import Data.String as String
 import Data.String.CodeUnits as SCU
+import Data.Argonaut.Core (stringify)
+import Data.Argonaut.Decode.Class
+  ( decodeJson
+  )
+import Data.Bifunctor (lmap)
+import Data.Argonaut.Encode.Class (encodeJson)
+import Data.Argonaut.Parser (jsonParser)
 import Data.Either (Either(..))
 import Effect (Effect)
 import Effect.Aff.Class
@@ -48,12 +55,22 @@ import Graph.Types
   , emptyGraph
   )
 
+-- | A saved repository entry.
+type RepoEntry =
+  { owner :: String
+  , repo :: String
+  , ref :: String
+  , token :: String
+  }
+
 data Action
   = Initialize
   | SetRepo String
   | SetToken String
   | SetRef String
-  | LoadGraph
+  | AddRepo
+  | LoadRepo RepoEntry
+  | RemoveRepo RepoEntry
   | NodeTapped NodeId
   | Focus
   | ShowAll
@@ -68,6 +85,8 @@ type State =
   { repoInput :: String
   , refInput :: String
   , tokenInput :: String
+  , repos :: Array RepoEntry
+  , activeRepo :: Maybe RepoEntry
   , config :: GH.Config
   , fullGraph :: Graph
   , selectedNode :: Maybe NodeId
@@ -92,6 +111,8 @@ initialState _ =
   { repoInput: ""
   , refInput: "main"
   , tokenInput: ""
+  , repos: []
+  , activeRepo: Nothing
   , config:
       { owner: ""
       , repo: ""
@@ -135,35 +156,7 @@ render state =
   HH.div_
     [ HH.div
         [ HP.id "toolbar" ]
-        [ HH.input
-            [ HP.placeholder "owner/repo"
-            , HP.value state.repoInput
-            , HE.onValueInput SetRepo
-            , HP.id "repo-input"
-            ]
-        , HH.input
-            [ HP.placeholder "ref (main)"
-            , HP.value state.refInput
-            , HE.onValueInput SetRef
-            , HP.id "ref-input"
-            ]
-        , HH.input
-            [ HP.placeholder "GitHub token"
-            , HP.type_ HP.InputPassword
-            , HP.value state.tokenInput
-            , HE.onValueInput SetToken
-            , HP.id "token-input"
-            ]
-        , HH.button
-            [ HE.onClick \_ -> LoadGraph
-            , HP.disabled state.loading
-            ]
-            [ HH.text
-                if state.loading then
-                  "Loading..."
-                else "Load"
-            ]
-        , case state.selectedNode of
+        [ case state.selectedNode of
             Nothing -> HH.text ""
             Just _ ->
               if state.focused then
@@ -206,7 +199,12 @@ render state =
             [ HP.id "error-bar" ]
             [ HH.text err ]
     , HH.div [ HP.id "main" ]
-        [ HH.div [ HP.id "cy" ]
+        [ HH.div
+            [ HP.id "repo-panel" ]
+            [ renderRepoForm state
+            , renderRepoList state
+            ]
+        , HH.div [ HP.id "cy" ]
             [ if
                 Map.isEmpty
                   state.fullGraph.nodes
@@ -214,9 +212,8 @@ render state =
                 HH.p
                   [ HP.id "placeholder" ]
                   [ HH.text
-                      "Enter a GitHub repo \
-                      \that contains a \
-                      \call-graph.dot file."
+                      "Add a repo to get \
+                      \started."
                   ]
               else HH.text ""
             ]
@@ -230,6 +227,82 @@ render state =
             ]
         ]
     ]
+
+renderRepoForm
+  :: forall m
+   . State
+  -> H.ComponentHTML Action () m
+renderRepoForm state =
+  HH.div
+    [ HP.id "repo-form" ]
+    [ HH.input
+        [ HP.placeholder "owner/repo"
+        , HP.value state.repoInput
+        , HE.onValueInput SetRepo
+        ]
+    , HH.input
+        [ HP.placeholder "ref (main)"
+        , HP.value state.refInput
+        , HE.onValueInput SetRef
+        ]
+    , HH.input
+        [ HP.placeholder "token"
+        , HP.type_ HP.InputPassword
+        , HP.value state.tokenInput
+        , HE.onValueInput SetToken
+        ]
+    , HH.button
+        [ HE.onClick \_ -> AddRepo
+        , HP.disabled state.loading
+        ]
+        [ HH.text
+            if state.loading then "..."
+            else "Add"
+        ]
+    ]
+
+renderRepoList
+  :: forall m
+   . State
+  -> H.ComponentHTML Action () m
+renderRepoList state =
+  HH.div
+    [ HP.id "repo-list" ]
+    ( map (renderRepoItem state) state.repos )
+
+renderRepoItem
+  :: forall m
+   . State
+  -> RepoEntry
+  -> H.ComponentHTML Action () m
+renderRepoItem state entry =
+  let
+    isActive = state.activeRepo == Just entry
+    label = entry.owner <> "/" <> entry.repo
+      <> "@" <> entry.ref
+  in
+    HH.div
+      [ HP.class_
+          ( HH.ClassName
+              ( "repo-item"
+                  <> if isActive then " active"
+                    else ""
+              )
+          )
+      ]
+      [ HH.span
+          [ HP.class_
+              (HH.ClassName "repo-label")
+          , HE.onClick \_ -> LoadRepo entry
+          ]
+          [ HH.text label ]
+      , HH.button
+          [ HP.class_
+              (HH.ClassName "repo-remove")
+          , HE.onClick \_ -> RemoveRepo entry
+          ]
+          [ HH.text "x" ]
+      ]
 
 renderHistory
   :: forall m
@@ -373,18 +446,29 @@ loadParam key = do
   s <- localStorage w
   WS.getItem ("cge-" <> key) s
 
--- | Restore form params from localStorage.
-restoreParams
-  :: Effect
-       { repo :: String
-       , ref :: String
-       , token :: String
-       }
-restoreParams = do
-  repo <- fromMaybe "" <$> loadParam "repo"
-  ref <- fromMaybe "main" <$> loadParam "ref"
-  token <- fromMaybe "" <$> loadParam "token"
-  pure { repo, ref, token }
+-- | Save repo list as JSON to localStorage.
+saveRepos :: Array RepoEntry -> Effect Unit
+saveRepos repos =
+  saveParam "repos" (stringify (encodeJson repos))
+
+-- | Restore repo list from localStorage.
+restoreRepos :: Effect (Array RepoEntry)
+restoreRepos = do
+  raw <- loadParam "repos"
+  pure $ case raw of
+    Nothing -> []
+    Just json ->
+      case decodeRepos json of
+        Right repos -> repos
+        Left _ -> []
+
+decodeRepos
+  :: String
+  -> Either String (Array RepoEntry)
+decodeRepos json =
+  jsonParser json >>= \j ->
+    lmap show
+      (decodeJson j :: Either _ (Array RepoEntry))
 
 parseOwnerRepo
   :: String
@@ -408,12 +492,8 @@ handleAction = case _ of
   Initialize -> do
     liftEffect (Cy.initCytoscape "cy")
     liftEffect Resize.initResize
-    params <- liftEffect restoreParams
-    H.modify_ _
-      { repoInput = params.repo
-      , refInput = params.ref
-      , tokenInput = params.token
-      }
+    repos <- liftEffect restoreRepos
+    H.modify_ _ { repos = repos }
 
   SetRepo value ->
     H.modify_ _ { repoInput = value }
@@ -424,7 +504,7 @@ handleAction = case _ of
   SetRef value ->
     H.modify_ _ { refInput = value }
 
-  LoadGraph -> do
+  AddRepo -> do
     state <- H.get
     case parseOwnerRepo state.repoInput of
       Nothing -> H.modify_ _
@@ -433,49 +513,88 @@ handleAction = case _ of
         }
       Just { owner, repo } -> do
         let
-          cfg =
+          entry =
             { owner
             , repo
             , ref: state.refInput
             , token: state.tokenInput
             }
+          exists = Array.any
+            ( \r ->
+                r.owner == owner
+                  && r.repo == repo
+                  && r.ref == entry.ref
+            )
+            state.repos
+          newRepos =
+            if exists then state.repos
+            else Array.snoc state.repos entry
         H.modify_ _
-          { config = cfg
-          , loading = true
+          { repos = newRepos
+          , repoInput = ""
+          , refInput = "main"
           , error = Nothing
           }
-        result <- liftAff
-          (GH.fetchFile cfg "call-graph.dot")
-        case result of
-          Left err -> H.modify_ _
-            { loading = false
-            , error = Just err
-            }
-          Right dot -> do
-            let
-              parsed = Dot.parseDot dot
-              graph = buildGraph
-                parsed.nodes
-                parsed.edges
-            liftEffect $ Cy.setElements
-              (toElements graph)
-            subscribeTaps
-            liftEffect do
-              saveParam "repo" state.repoInput
-              saveParam "ref" state.refInput
-              saveParam "token"
-                state.tokenInput
-            H.modify_ _
-              { fullGraph = graph
-              , selectedNode = Nothing
-              , selectedLabel = Nothing
-              , selectedKind = Nothing
-              , selectedModule = Nothing
-              , sourceCode = Nothing
-              , focused = false
-              , loading = false
-              , error = Nothing
-              }
+        liftEffect (saveRepos newRepos)
+        handleAction (LoadRepo entry)
+
+  LoadRepo entry -> do
+    let
+      cfg =
+        { owner: entry.owner
+        , repo: entry.repo
+        , ref: entry.ref
+        , token: entry.token
+        }
+    H.modify_ _
+      { config = cfg
+      , activeRepo = Just entry
+      , loading = true
+      , error = Nothing
+      }
+    result <- liftAff
+      (GH.fetchFile cfg "call-graph.dot")
+    case result of
+      Left err -> H.modify_ _
+        { loading = false
+        , error = Just err
+        }
+      Right dot -> do
+        let
+          parsed = Dot.parseDot dot
+          graph = buildGraph
+            parsed.nodes
+            parsed.edges
+        liftEffect $ Cy.setElements
+          (toElements graph)
+        subscribeTaps
+        H.modify_ _
+          { fullGraph = graph
+          , selectedNode = Nothing
+          , selectedLabel = Nothing
+          , selectedKind = Nothing
+          , selectedModule = Nothing
+          , sourceCode = Nothing
+          , history = []
+          , focused = false
+          , loading = false
+          , error = Nothing
+          }
+
+  RemoveRepo entry -> do
+    state <- H.get
+    let
+      newRepos = Array.filter
+        ( \r ->
+            not
+              ( r.owner == entry.owner
+                  && r.repo == entry.repo
+                  && r.ref == entry.ref
+              )
+        )
+        state.repos
+    H.modify_ _ { repos = newRepos }
+    liftEffect (saveRepos newRepos)
 
   NodeTapped nodeId -> do
     state <- H.get
