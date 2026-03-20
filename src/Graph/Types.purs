@@ -11,9 +11,20 @@ module Graph.Types
 
 import Prelude
 
+import Data.Argonaut.Core (fromString, toString)
+import Data.Argonaut.Decode.Class
+  ( class DecodeJson
+  )
+import Data.Argonaut.Decode.Error
+  ( JsonDecodeError(..)
+  )
+import Data.Argonaut.Encode.Class
+  ( class EncodeJson
+  )
+import Data.Either (note)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 
 -- | Unique identifier for a node.
@@ -39,6 +50,22 @@ instance showNodeKind :: Show NodeKind where
   show Function = "function"
   show Constructor = "constructor"
   show Field = "field"
+
+parseKind :: String -> NodeKind
+parseKind "module" = Module
+parseKind "type" = Type
+parseKind "function" = Function
+parseKind "constructor" = Constructor
+parseKind "field" = Field
+parseKind _ = Function
+
+instance encodeJsonNodeKind :: EncodeJson NodeKind where
+  encodeJson = show >>> fromString
+
+instance decodeJsonNodeKind :: DecodeJson NodeKind where
+  decodeJson json =
+    note (TypeMismatch "NodeKind") (toString json)
+      <#> parseKind
 
 -- | A node in the call graph.
 type Node =
