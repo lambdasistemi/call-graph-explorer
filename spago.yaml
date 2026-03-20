@@ -28,6 +28,7 @@ package:
     - dom-indexed
     - halogen-subscriptions
     - fetch
+    - web-storage
   bundle:
     module: Main
     outfile: dist/index.js

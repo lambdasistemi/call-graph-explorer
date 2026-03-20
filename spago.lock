@@ -31,7 +31,8 @@
             "web-dom",
             "web-events",
             "web-file",
-            "web-html"
+            "web-html",
+            "web-storage"
           ]
         },
         "test": {
