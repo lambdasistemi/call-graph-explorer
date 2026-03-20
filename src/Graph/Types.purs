@@ -13,6 +13,7 @@ import Prelude
 
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Maybe (Maybe)
 import Data.Set (Set)
 
 -- | Unique identifier for a node.
@@ -45,6 +46,7 @@ type Node =
   , label :: String
   , kind :: NodeKind
   , module_ :: ModuleName
+  , line :: Maybe Int
   }
 
 -- | A directed edge in the call graph.

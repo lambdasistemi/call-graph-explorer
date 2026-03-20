@@ -5,9 +5,12 @@ module Main
 
 import Prelude
 
+import Data.Array as Array
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (Pattern(..), split)
+import Data.String as String
+import Data.String.CodeUnits as SCU
 import Data.Either (Either(..))
 import Effect (Effect)
 import Effect.Aff.Class
@@ -353,6 +356,7 @@ handleAction = case _ of
       node = Map.lookup nodeId
         state.fullGraph.nodes
       mod_ = map _.module_ node
+      nodeLine = node >>= _.line
     liftEffect $ Cy.markRoot nodeId
     H.modify_ _
       { selectedNode = Just nodeId
@@ -369,7 +373,12 @@ handleAction = case _ of
         case result of
           Right src ->
             H.modify_ _
-              { sourceCode = Just src }
+              { sourceCode = Just
+                  ( extractSnippet
+                      nodeLine
+                      src
+                  )
+              }
           Left _ -> pure unit
       _ -> pure unit
 
@@ -415,6 +424,65 @@ handleAction = case _ of
       handleAction Focus
 
   FitAll -> liftEffect Cy.fitAll
+
+-- | Extract a code snippet around the given line.
+-- | Shows 3 lines before and continues until the
+-- | next top-level definition (line starting at
+-- | column 0 with a non-space character) or 30
+-- | lines, whichever comes first.
+extractSnippet :: Maybe Int -> String -> String
+extractSnippet Nothing src = src
+extractSnippet (Just targetLine) src =
+  let
+    allLines = String.split (Pattern "\n") src
+    -- 0-indexed start, show 3 lines before
+    start = max 0 (targetLine - 4)
+    afterTarget = Array.drop targetLine allLines
+    -- Find end: next top-level def or 30 lines
+    bodyLen = fromMaybe 30
+      ( Array.findIndex isTopLevel
+          (Array.drop 1 afterTarget)
+          <#> (_ + 1)
+      )
+    end = min (Array.length allLines)
+      (targetLine + bodyLen)
+    snippet = Array.slice start end allLines
+    -- Add line numbers
+    numbered = Array.mapWithIndex
+      ( \i line ->
+          let
+            num = show (start + i + 1)
+            pad =
+              String.joinWith ""
+                ( Array.replicate
+                    (4 - String.length num)
+                    " "
+                )
+            marker =
+              if start + i + 1 == targetLine
+                then ">"
+                else " "
+          in
+            pad <> num <> marker <> " "
+              <> line
+      )
+      snippet
+  in
+    String.joinWith "\n" numbered
+
+-- | A line is a top-level definition if it starts
+-- | with a non-space, non-empty character and is
+-- | not a comment or pragma.
+isTopLevel :: String -> Boolean
+isTopLevel line =
+  case SCU.charAt 0 line of
+    Nothing -> false
+    Just c ->
+      c /= ' '
+        && c /= '\t'
+        && c /= '-'
+        && c /= '{'
+        && c /= '\n'
 
 main :: Effect Unit
 main =
