@@ -6,7 +6,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     dev-assets-playwright = {
-      url = "github:paolino/dev-assets?dir=playwright&ref=feat/playwright";
+      url = "github:paolino/dev-assets?dir=playwright";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
