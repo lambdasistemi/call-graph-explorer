@@ -21,7 +21,8 @@ type Config =
   }
 
 -- | Fetch a file's text content from a GitHub repo.
--- | Uses the raw content endpoint for simplicity.
+-- | Uses the Contents API with raw media type to
+-- | get the file as plain text (CORS-friendly).
 fetchFile
   :: Config
   -> String
@@ -29,20 +30,21 @@ fetchFile
 fetchFile cfg path = do
   let
     url =
-      "https://raw.githubusercontent.com/"
+      "https://api.github.com/repos/"
         <> cfg.owner
         <> "/"
         <> cfg.repo
-        <> "/"
-        <> cfg.ref
-        <> "/"
+        <> "/contents/"
         <> path
+        <> "?ref="
+        <> cfg.ref
   result <- try do
     resp <- fetch url
       { headers:
           { "Authorization":
               "Bearer " <> cfg.token
-          , "Accept": "application/vnd.github.raw"
+          , "Accept":
+              "application/vnd.github.raw+json"
           }
       }
     body <- resp.text

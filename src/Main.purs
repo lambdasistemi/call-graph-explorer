@@ -54,7 +54,10 @@ data Action
   | FitAll
 
 type State =
-  { config :: GH.Config
+  { repoInput :: String
+  , refInput :: String
+  , tokenInput :: String
+  , config :: GH.Config
   , fullGraph :: Graph
   , selectedNode :: Maybe NodeId
   , selectedLabel :: Maybe String
@@ -69,7 +72,10 @@ type State =
 
 initialState :: forall i. i -> State
 initialState _ =
-  { config:
+  { repoInput: ""
+  , refInput: "main"
+  , tokenInput: ""
+  , config:
       { owner: ""
       , repo: ""
       , ref: "main"
@@ -113,24 +119,20 @@ render state =
         [ HP.id "toolbar" ]
         [ HH.input
             [ HP.placeholder "owner/repo"
-            , HP.value
-                ( state.config.owner
-                    <> "/"
-                    <> state.config.repo
-                )
+            , HP.value state.repoInput
             , HE.onValueInput SetRepo
             , HP.id "repo-input"
             ]
         , HH.input
-            [ HP.placeholder "branch or SHA"
-            , HP.value state.config.ref
+            [ HP.placeholder "ref (main)"
+            , HP.value state.refInput
             , HE.onValueInput SetRef
             , HP.id "ref-input"
             ]
         , HH.input
             [ HP.placeholder "GitHub token"
             , HP.type_ HP.InputPassword
-            , HP.value state.config.token
+            , HP.value state.tokenInput
             , HE.onValueInput SetToken
             , HP.id "token-input"
             ]
@@ -239,7 +241,9 @@ renderSidebar state =
             Just mod_ ->
               HH.p
                 [ HP.class_
-                    (HH.ClassName "module-path")
+                    ( HH.ClassName
+                        "module-path"
+                    )
                 ]
                 [ HH.text mod_ ]
         , case state.sourceCode of
@@ -247,7 +251,9 @@ renderSidebar state =
             Just src ->
               HH.pre
                 [ HP.id "source-code" ]
-                [ HH.code_ [ HH.text src ] ]
+                [ HH.code_
+                    [ HH.text src ]
+                ]
         ]
 
 subscribeTaps
@@ -263,7 +269,11 @@ subscribeTaps = do
   void $ H.subscribe emitter
 
 parseOwnerRepo
-  :: String -> Maybe { owner :: String, repo :: String }
+  :: String
+  -> Maybe
+       { owner :: String
+       , repo :: String
+       }
 parseOwnerRepo s =
   case split (Pattern "/") s of
     [ owner, repo ]
@@ -281,66 +291,61 @@ handleAction = case _ of
     liftEffect (Cy.initCytoscape "cy")
 
   SetRepo value ->
-    case parseOwnerRepo value of
-      Just { owner, repo } ->
-        H.modify_ \s -> s
-          { config = s.config
-              { owner = owner
-              , repo = repo
-              }
-          }
-      Nothing ->
-        H.modify_ \s -> s
-          { config = s.config
-              { owner = value
-              , repo = ""
-              }
-          }
+    H.modify_ _ { repoInput = value }
 
   SetToken value ->
-    H.modify_ \s -> s
-      { config = s.config
-          { token = value }
-      }
+    H.modify_ _ { tokenInput = value }
 
   SetRef value ->
-    H.modify_ \s -> s
-      { config = s.config
-          { ref = value }
-      }
+    H.modify_ _ { refInput = value }
 
   LoadGraph -> do
     state <- H.get
-    H.modify_ _
-      { loading = true, error = Nothing }
-    result <- liftAff $ GH.fetchFile
-      state.config
-      "call-graph.dot"
-    case result of
-      Left err -> H.modify_ _
-        { loading = false
-        , error = Just err
+    case parseOwnerRepo state.repoInput of
+      Nothing -> H.modify_ _
+        { error = Just
+            "Enter owner/repo format"
         }
-      Right dot -> do
+      Just { owner, repo } -> do
         let
-          parsed = Dot.parseDot dot
-          graph = buildGraph
-            parsed.nodes
-            parsed.edges
-        liftEffect $ Cy.setElements
-          (toElements graph)
-        subscribeTaps
+          cfg =
+            { owner
+            , repo
+            , ref: state.refInput
+            , token: state.tokenInput
+            }
         H.modify_ _
-          { fullGraph = graph
-          , selectedNode = Nothing
-          , selectedLabel = Nothing
-          , selectedKind = Nothing
-          , selectedModule = Nothing
-          , sourceCode = Nothing
-          , focused = false
-          , loading = false
+          { config = cfg
+          , loading = true
           , error = Nothing
           }
+        result <- liftAff
+          (GH.fetchFile cfg "call-graph.dot")
+        case result of
+          Left err -> H.modify_ _
+            { loading = false
+            , error = Just err
+            }
+          Right dot -> do
+            let
+              parsed = Dot.parseDot dot
+              graph = buildGraph
+                parsed.nodes
+                parsed.edges
+            liftEffect $ Cy.setElements
+              (toElements graph)
+            subscribeTaps
+            H.modify_ _
+              { fullGraph = graph
+              , selectedNode = Nothing
+              , selectedLabel = Nothing
+              , selectedKind = Nothing
+              , selectedModule = Nothing
+              , sourceCode = Nothing
+              , focused = false
+              , loading = false
+              , error = Nothing
+              }
 
   NodeTapped nodeId -> do
     state <- H.get
@@ -356,7 +361,6 @@ handleAction = case _ of
       , selectedModule = mod_
       , sourceCode = Nothing
       }
-    -- Fetch source file from GitHub
     case mod_ of
       Just path | path /= "" -> do
         cfg <- H.gets _.config
@@ -364,7 +368,8 @@ handleAction = case _ of
           (GH.fetchFile cfg path)
         case result of
           Right src ->
-            H.modify_ _ { sourceCode = Just src }
+            H.modify_ _
+              { sourceCode = Just src }
           Left _ -> pure unit
       _ -> pure unit
 
