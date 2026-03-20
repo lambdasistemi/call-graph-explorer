@@ -16,10 +16,10 @@ lint:
 ci: lint build bundle
 
 test: bundle
-    npx playwright test
+    playwright test
 
 test-auth: bundle
-    GH_TOKEN=$(gh auth token) npx playwright test
+    GH_TOKEN=$(gh auth token) playwright test
 
 serve: bundle
     npx serve dist -p 10001

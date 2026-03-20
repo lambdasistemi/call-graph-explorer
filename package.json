@@ -1,8 +1,0 @@
-{
-  "name": "call-graph-explorer",
-  "version": "1.0.0",
-  "private": true,
-  "devDependencies": {
-    "@playwright/test": "1.57.0"
-  }
-}
