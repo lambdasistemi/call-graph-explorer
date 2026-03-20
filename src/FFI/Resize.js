@@ -1,22 +1,21 @@
-// Make the sidebar resizable by dragging a handle.
-// The handle sits between #cy and #sidebar.
-export const initResize = () => {
-  var handle = document.getElementById("resize-handle");
-  var sidebar = document.getElementById("sidebar");
-  if (!handle || !sidebar) return;
+// Make panels resizable by dragging handles.
 
-  var startX = 0;
-  var startW = 0;
+function makeResizable(handleId, panelId, direction) {
+  var handle = document.getElementById(handleId);
+  var panel = document.getElementById(panelId);
+  if (!handle || !panel) return;
 
   handle.addEventListener("mousedown", (e) => {
     e.preventDefault();
-    startX = e.clientX;
-    startW = sidebar.offsetWidth;
+    var startX = e.clientX;
+    var startW = panel.offsetWidth;
 
     var onMove = (ev) => {
-      var delta = startX - ev.clientX;
-      var newW = Math.max(200, Math.min(800, startW + delta));
-      sidebar.style.width = newW + "px";
+      var delta = direction === "left"
+        ? ev.clientX - startX
+        : startX - ev.clientX;
+      var newW = Math.max(150, Math.min(900, startW + delta));
+      panel.style.width = newW + "px";
     };
 
     var onUp = () => {
@@ -27,4 +26,9 @@ export const initResize = () => {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   });
+}
+
+export const initResize = () => {
+  makeResizable("left-resize-handle", "repo-panel", "left");
+  makeResizable("resize-handle", "sidebar", "right");
 };
